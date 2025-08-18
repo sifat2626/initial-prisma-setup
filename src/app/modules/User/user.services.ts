@@ -45,14 +45,6 @@ const createUserIntoDb = async (payload: User) => {
         updatedAt: true,
       },
     })
-
-    await prisma.club.create({
-      data: {
-        name: `${payload.name}`,
-        ownerId: result.id,
-      },
-    })
-
     return result
   })
 

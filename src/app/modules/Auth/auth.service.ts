@@ -34,7 +34,6 @@ const loginUser = async (payload: { email: string; password: string }) => {
   if (!isCorrectPassword) {
     throw new ApiError(httpStatus.BAD_REQUEST, "Password incorrect!")
   }
-
   const accessToken = jwtHelpers.generateToken(
     {
       id: userData.id,
