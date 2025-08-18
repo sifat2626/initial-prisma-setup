@@ -25,7 +25,7 @@ export const sendEmail = async (to: string, subject: string, html: string) => {
     const info = await transporter.sendMail(mailOptions)
 
     // Log the success message
-    console.log(`Email sent: ${info.messageId}`)
+    console.log(`Email sent:  ${info.messageId}`)
     return info.messageId
   } catch (error) {
     // @ts-ignore
