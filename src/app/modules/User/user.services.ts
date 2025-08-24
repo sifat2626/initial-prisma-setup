@@ -83,6 +83,11 @@ const verifyOtpAndRegister = async (email: string, otp: string) => {
   return { token: accessToken }
 }
 
+function removePasswordFromUser(user: User): Omit<User, "password"> {
+  const { password, ...userWithoutPassword } = user
+  return userWithoutPassword
+}
+
 // reterive all users from the database also searcing anf filetering
 const getUsersFromDb = async (query: any) => {
   const { page = 1, limit = 10 } = query
