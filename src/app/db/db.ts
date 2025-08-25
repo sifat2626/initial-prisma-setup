@@ -1,6 +1,6 @@
-import { UserRole } from "@prisma/client";
-import prisma from "../../shared/prisma";
-import * as bcrypt from "bcrypt";
+import { UserRole } from "@prisma/client"
+import prisma from "../../shared/prisma"
+import * as bcrypt from "bcrypt"
 
 export const initiateSuperAdmin = async () => {
   const payload: any = {
@@ -9,21 +9,21 @@ export const initiateSuperAdmin = async () => {
     phoneNumber: "1234567890",
     password: "12345678",
     role: UserRole.SUPER_ADMIN,
-  };
+    isVerified: true,
+  }
 
   const isExistUser = await prisma.user.findUnique({
     where: {
       email: payload.email,
     },
-  });
+  })
 
+  const hashedPassword = await bcrypt.hash(payload.password, 12)
+  payload.password = hashedPassword
 
-  const hashedPassword = await bcrypt.hash(payload.password, 12);
-  payload.password = hashedPassword;
-
-  if (isExistUser) return;
+  if (isExistUser) return
 
   await prisma.user.create({
     data: payload,
-  });
-};
+  })
+}
