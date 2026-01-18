@@ -12,10 +12,10 @@ const auth = (...roles: string[]) => {
   return async (
     req: Request & { user?: any },
     res: Response,
-    next: NextFunction
+    next: NextFunction,
   ) => {
     try {
-      const token = req.headers.authorization || req.cookies.token
+      const token = req.headers.authorization
 
       if (!token) {
         throw new ApiError(httpStatus.UNAUTHORIZED, "You are not authorized!")
@@ -23,7 +23,7 @@ const auth = (...roles: string[]) => {
 
       const verifiedUser = jwtHelpers.verifyToken(
         token,
-        config.jwt.jwt_secret as Secret
+        config.jwt.jwt_secret as Secret,
       )
       const { id, role, iat } = verifiedUser
 
