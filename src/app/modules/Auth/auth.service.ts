@@ -16,6 +16,17 @@ const loginUser = async (payload: { email: string; password: string }) => {
     },
   })
 
+  if (!userData) {
+    throw new ApiError(
+      httpStatus.NOT_FOUND,
+      "User not found! with this email " + payload.email,
+    )
+  }
+
+  if (userData?.status === UserStatus.BLOCKED) {
+    throw new ApiError(httpStatus.FORBIDDEN, "User is blocked!")
+  }
+
   if (!userData?.isVerified) {
     throw new ApiError(httpStatus.UNAUTHORIZED, "User is not verified!")
   }
@@ -23,12 +34,12 @@ const loginUser = async (payload: { email: string; password: string }) => {
   if (!userData?.email) {
     throw new ApiError(
       httpStatus.NOT_FOUND,
-      "User not found! with this email " + payload.email
+      "User not found! with this email " + payload.email,
     )
   }
   const isCorrectPassword: boolean = await bcrypt.compare(
     payload.password,
-    userData.password
+    userData.password,
   )
 
   if (!isCorrectPassword) {
@@ -41,7 +52,7 @@ const loginUser = async (payload: { email: string; password: string }) => {
       role: userData.role,
     },
     config.jwt.jwt_secret as Secret,
-    config.jwt.expires_in as string
+    config.jwt.expires_in as string,
   )
 
   return { token: accessToken }
@@ -146,7 +157,7 @@ const verifyOtp = async (email: string, otp: string) => {
       role: user.role,
     },
     config.jwt.jwt_secret as Secret,
-    config.jwt.expires_in as string
+    config.jwt.expires_in as string,
   )
 
   return { token: accessToken }
@@ -177,7 +188,7 @@ const getMyProfile = async (userId: string) => {
 const changePassword = async (
   userToken: string,
   newPassword: string,
-  oldPassword: string
+  oldPassword: string,
 ) => {
   const decodedToken = jwtHelpers.verifyToken(userToken, config.jwt.jwt_secret!)
 
