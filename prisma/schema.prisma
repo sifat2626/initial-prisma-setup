@@ -7,48 +7,306 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-model User {
-  id           String     @id @default(auto()) @map("_id") @db.ObjectId
-  name         String
-  email        String     @unique
-  phoneNumber  String?
-  profileImage String?
-  password     String
-  isVerified   Boolean    @default(false)
-  needsPasswordChange Boolean @default(false)
+// ──────────────────────────────────────────────
+// Enums
+// ──────────────────────────────────────────────
 
-  customerId String?
-  role         UserRole   @default(USER)
-  status       UserStatus @default(ACTIVE)
-  createdAt    DateTime   @default(now())
-  updatedAt    DateTime   @updatedAt
-
-  @@map("Users")
-  Otp Otp[]
+enum PackageStatus {
+  EXPECTED
+  ARRIVED
+  UNDER_REVIEW
+  READY_TO_CONSOLIDATE
+  CONSOLIDATED
+  SHIPPED
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+  LOST
+  DAMAGED
 }
 
-model Otp {
+enum ConsolidationStatus {
+  PENDING
+  APPROVED
+  REPACKED
+  READY_TO_SHIP
+  SHIPPED
+  CANCELLED
+}
+
+enum ShipmentStatus {
+  PROCESSING
+  READY_TO_SHIP
+  SHIPPED
+  IN_TRANSIT
+  DELIVERED
+  CANCELLED
+  DELAYED
+}
+
+enum TransactionType {
+  DEPOSIT
+  PAYMENT
+  REFUND
+  REMITTANCE_OUT
+}
+
+enum RemittanceStatus {
+  PROCESSING
+  DELAYED
+  DELIVERED
+  FAILED
+}
+
+enum LogisticGroupType {
+  EXPRESS_BAG
+  AIR_FLIGHT
+  MARITIME_CONTAINER
+}
+
+enum LogisticGroupStatus {
+  OPEN
+  FULL
+  DEPARTED
+  COMPLETED
+  CANCELLED
+}
+
+// ──────────────────────────────────────────────
+// Models
+// ──────────────────────────────────────────────
+
+model User {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  email        String   @unique
+  username     String?  @unique
+  fullName     String?
+  phone        String?
+  country      String?
+  passwordHash String
+  lockerId     String?  @unique
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  locker          Locker?
+  wallet          Wallet?
+  packages        Package[]
+  consolidations  ConsolidatedPackage[] // requested or owned
+  shipments       Shipment[]
+  remittances     Remittance[]
+  transactions    WalletTransaction[]
+  notifications   Notification[]
+
+  @@map("users")
+}
+
+model Locker {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  lockerCode   String   @unique
+  userId       String   @unique @db.ObjectId
+  addressLine1 String
+  addressLine2 String?
+  city         String
+  state        String
+  zipCode      String
+  country      String   @default("United States")
+  phone        String?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  deletedAt    DateTime?
+
+  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  packages Package[]
+
+  @@map("lockers")
+}
+
+model Package {
+  id              String        @id @default(auto()) @map("_id") @db.ObjectId
+  trackingNumber  String        @unique
+  lockerId        String        @db.ObjectId
+  itemDescription String?
+  category        String?
+  weightKg        Float?
+  lengthCm        Float?
+  widthCm         Float?
+  heightCm        Float?
+  arrivalDate     DateTime?
+  status          PackageStatus @default(EXPECTED)
+  note            String?
+  photos          Json?         // array of URLs
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+  deletedAt       DateTime?
+
+  locker            Locker              @relation(fields: [lockerId], references: [id])
+  consolidatedPackage ConsolidatedPackage? @relation(fields: [consolidatedPackageId], references: [id])
+  consolidatedPackageId String?           @db.ObjectId
+
+  @@index([trackingNumber])
+  @@map("packages")
+}
+
+model ConsolidatedPackage {
+  id              String               @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String               @db.ObjectId
+  finalWeightKg   Float
+  finalLengthCm   Float?
+  finalWidthCm    Float?
+  finalHeightCm   Float?
+  status          ConsolidationStatus  @default(PENDING)
+  adminNote       String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  deletedAt       DateTime?
+
+  user            User                 @relation(fields: [userId], references: [id])
+  originalPackages Package[]
+  shipment        Shipment?
+
+  @@map("consolidated_packages")
+}
+
+model Shipment {
+  id                  String         @id @default(auto()) @map("_id") @db.ObjectId
+  consolidatedPackageId String?      @unique @db.ObjectId
+  trackingNumber      String?        @unique
+  carrier             String?        // e.g. "fedex", "dhl", "usps"
+  shippoRateId        String?        // Shippo rate object_id
+  shippoTransactionId String?        @unique // Shippo transaction id (label)
+  labelUrl            String?        // PDF label from Shippo
+  destinationCountry  String
+  destinationCity     String?
+  recipientName       String
+  recipientPhone      String?
+  recipientEmail      String?
+  status              ShipmentStatus @default(PROCESSING)
+  estimatedDelivery   DateTime?
+  finalWeightKg       Float?
+  costUsd             Float?         // what user paid (incl. markup)
+  shippoCostUsd       Float?         // actual Shippo + carrier cost
+  markupUsd           Float?         // your profit margin
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+  deletedAt           DateTime?
+
+  consolidatedPackage ConsolidatedPackage? @relation(fields: [consolidatedPackageId], references: [id])
+  logisticGroup       LogisticGroup?         @relation(fields: [logisticGroupId], references: [id])
+  logisticGroupId     String?                @db.ObjectId
+
+  @@map("shipments")
+}
+
+model LogisticGroup {
+  id              String               @id @default(auto()) @map("_id") @db.ObjectId
+  type            LogisticGroupType
+  code            String               @unique
+  origin          String
+  destination     String
+  departureDate   DateTime?
+  arrivalDate     DateTime?
+  weightCapacityKg Float?
+  currentWeightKg  Float?              @default(0)
+  packageCount    Int                  @default(0)
+  status          LogisticGroupStatus  @default(OPEN)
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+
+  shipments       Shipment[]
+
+  @@map("logistic_groups")
+}
+
+model Wallet {
   id        String   @id @default(auto()) @map("_id") @db.ObjectId
-  userId    String   @map("user_id") @db.ObjectId
-  otp       String
-  expiresAt DateTime @default(now())
+  userId    String   @unique @db.ObjectId
+  balance   Float    @default(0)
+  currency  String   @default("USD")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
-  user     User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user          User                @relation(fields: [userId], references: [id])
+  transactions  WalletTransaction[]
 
-  @@map("Otps")
+  @@map("wallets")
 }
 
-enum UserRole {
-  ADMIN
-  TEACHER
-  SUPER_ADMIN
-  USER
+model WalletTransaction {
+  id            String          @id @default(auto()) @map("_id") @db.ObjectId
+  walletId      String          @db.ObjectId
+  type          TransactionType
+  amount        Float
+  fee           Float?          @default(0)
+  stripePaymentId String?       // for Stripe deposits
+  referenceId   String?         // shipmentId / remittanceId
+  description   String?
+  status        String          @default("COMPLETED")
+  createdAt     DateTime        @default(now())
+
+  wallet        Wallet          @relation(fields: [walletId], references: [id])
+
+  @@map("wallet_transactions")
 }
 
-enum UserStatus {
-  ACTIVE
-  INACTIVE
-  BLOCKED
+model Remittance {
+  id              String            @id @default(auto()) @map("_id") @db.ObjectId
+  userId          String            @db.ObjectId
+  recipientName   String
+  recipientPhone  String?
+  recipientEmail  String?
+  amount          Float
+  fee             Float?
+  status          RemittanceStatus  @default(PROCESSING)
+  transactionId   String?           @db.ObjectId // WalletTransaction
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  user            User              @relation(fields: [userId], references: [id])
+
+  @@map("remittances")
+}
+
+model InternalUser {
+  id           String   @id @default(auto()) @map("_id") @db.ObjectId
+  email        String   @unique
+  fullName     String
+  passwordHash String
+  role         String   // e.g. "ADMIN", "OPERATOR"
+  status       String   @default("ACTIVE")
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@map("internal_users")
+}
+
+model AuditLog {
+  id         String   @id @default(auto()) @map("_id") @db.ObjectId
+  actorId    String?  @db.ObjectId
+  actorType  String?  // "USER" | "INTERNAL"
+  action     String
+  entityType String
+  entityId   String?  @db.ObjectId
+  oldValue   Json?
+  newValue   Json?
+  ipAddress  String?
+  createdAt  DateTime @default(now())
+
+  @@index([entityType, entityId])
+  @@map("audit_logs")
+}
+
+model Notification {
+  id             String   @id @default(auto()) @map("_id") @db.ObjectId
+  userId         String?  @db.ObjectId
+  internalUserId String?  @db.ObjectId
+  title          String
+  message        String
+  type           String
+  isRead         Boolean  @default(false)
+  referenceType  String?
+  referenceId    String?  @db.ObjectId
+  createdAt      DateTime @default(now())
+
+  @@map("notifications")
 }
