@@ -274,7 +274,10 @@ const verifyForgetPassword = async (payload: {
 }
 
 // reset password
-const resetPassword = async (payload: { email: string; password: string }) => {
+const resetPassword = async (payload: {
+  email: string
+  newPassword: string
+}) => {
   const user = await prisma.user.findUnique({
     where: { email: payload.email, needsPasswordChange: true },
   })
@@ -284,7 +287,7 @@ const resetPassword = async (payload: { email: string; password: string }) => {
   }
 
   // hash password
-  const password = await bcrypt.hash(payload.password, 12)
+  const hashedPassword = await bcrypt.hash(payload.newPassword, 12)
 
   // update into database
   await prisma.user.update({
@@ -292,7 +295,7 @@ const resetPassword = async (payload: { email: string; password: string }) => {
       id: user.id,
     },
     data: {
-      password,
+      password: hashedPassword,
       needsPasswordChange: false,
     },
   })
